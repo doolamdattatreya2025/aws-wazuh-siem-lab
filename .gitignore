@@ -1,0 +1,25 @@
+```gitignore
+# Private keys
+*.pem
+
+# Environment files
+.env
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/
+
+# Dependency folders
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+```
