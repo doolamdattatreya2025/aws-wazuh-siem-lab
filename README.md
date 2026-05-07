@@ -1,87 +1,142 @@
-````md
 # Cloud-Native SIEM & Vulnerability Management Lab
 
 ## Overview
 
 This project demonstrates the deployment of a cloud-native Security Information and Event Management (SIEM) environment using **Wazuh** hosted on **AWS EC2** to monitor a **Windows 11** endpoint in real time.
 
-The environment replicates core SOC monitoring and vulnerability management workflows used in enterprise environments, bridging cloud infrastructure with endpoint security telemetry.
+The lab simulates enterprise-level Security Operations Center (SOC) workflows including:
+
+- Endpoint monitoring
+- Vulnerability detection
+- Threat analysis
+- MITRE ATT&CK mapping
+- Security configuration assessment
+- Brute-force attack detection
 
 ---
 
-## Architecture & Data Flow
+# Architecture & Data Flow
 
-The system uses a client-server architecture secured through AWS Security Groups and TLS-encrypted agent communication.
+```mermaid
+graph TD
+    subgraph "Local Environment (Endpoint)"
+        A[Windows 11 Laptop] -->|Monitors Logs/Files| B[Wazuh Agent v4.7.5]
+    end
 
-### Infrastructure Components
+    subgraph "Public Internet"
+        B -->|TLS Encrypted Channel| C{AWS Security Group}
+    end
 
-- **Manager (Cloud):**
-  - Wazuh Manager
-  - Wazuh Indexer
-  - Wazuh Dashboard
-  - Hosted on Ubuntu 22.04 LTS (AWS EC2 t3.medium)
+    subgraph "AWS Cloud (Security Operations Center)"
+        C -->|Port 1514: Events| D[Wazuh Manager]
+        C -->|Port 1515: Enrollment| D
+        D -->|Storage & Search| E[(Wazuh Indexer)]
+        E -->|Visualization| F[Wazuh Dashboard]
 
-- **Agent (Endpoint):**
-  - Windows 11 machine
-  - Wazuh Agent v4.7.5
+        subgraph "Infrastructure"
+            G[Ubuntu 22.04 LTS]
+            H[20GB EBS Volume]
+        end
+    end
 
-- **Data Pipeline:**
-  - Endpoint telemetry securely transmitted over TLS-encrypted channels
-  - Agent communication handled through ports 1514 and 1515
-
----
-
-## Architecture Diagram
-
-![Architecture](architecture/architecture-diagram.png)
-
----
-
-## Technologies Used
-
-- AWS EC2
-- Ubuntu 22.04 LTS
-- Wazuh v4.7.5
-- Windows 11
-- PowerShell
-- Linux CLI
-- AWS Security Groups
+    subgraph "Security Outcomes"
+        F --> I[Vulnerability Detection]
+        F --> J[MITRE ATT&CK Mapping]
+        F --> K[Brute Force Alerts]
+    end
+```
 
 ---
 
-## AWS Security Group Configuration
+# Infrastructure Components
+
+## Manager (Cloud)
+
+- Wazuh Manager
+- Wazuh Indexer
+- Wazuh Dashboard
+- Hosted on Ubuntu 22.04 LTS
+- AWS EC2 Instance Type: `t3.medium`
+
+## Endpoint (Local)
+
+- Windows 11 Laptop
+- Wazuh Agent v4.7.5
+
+---
+
+# AWS Security Group Configuration
 
 | Port | Protocol | Purpose | Source |
-|---|---|---|---|
-| 22 | TCP | SSH Management | Restricted to My IP |
-| 443 | TCP | Wazuh Dashboard Access | 0.0.0.0/0 |
-| 1514 | TCP | Agent Event Data | 0.0.0.0/0 |
+|------|----------|----------|---------|
+| 22 | TCP | SSH Management | My IP Only |
+| 443 | TCP | Wazuh Dashboard | 0.0.0.0/0 |
+| 1514 | TCP | Agent Event Traffic | 0.0.0.0/0 |
 | 1515 | TCP | Agent Registration | 0.0.0.0/0 |
 
 ---
 
-## Deployment Process
+# Project Screenshots
 
-### Phase 1 — Cloud Infrastructure
+## AWS Security Group Rules
 
-- Deployed Ubuntu 22.04 EC2 instance in AWS us-east-1
-- Configured AWS Security Groups
-- Expanded EBS storage from 8 GiB to 20 GiB
-- Installed Wazuh Manager, Indexer, and Dashboard
+![AWS Security Group](screenshots/security-group-rules.png)
 
-### Phase 2 — Endpoint Enrollment
+---
+
+## Vulnerability Dashboard
+
+![Vulnerability Dashboard](screenshots/vulnerabilities-dashboard.png)
+
+---
+
+## Critical Vulnerability Findings
+
+![Critical Vulnerabilities](screenshots/critical-vulnerabilities.png)
+
+---
+
+## Active Wazuh Agent
+
+![Active Agent](screenshots/active-agent.png)
+
+---
+
+## Security Configuration Assessment (SCA)
+
+![SCA Results](screenshots/sca-results.png)
+
+---
+
+# Deployment Phases
+
+## Phase 1 — Cloud Infrastructure Setup
+
+- Created AWS EC2 Ubuntu instance
+- Configured Security Groups
+- Opened required SIEM ports
+- Hardened SSH access
+
+## Phase 2 — Wazuh Deployment
+
+- Installed Wazuh Manager
+- Installed Wazuh Indexer
+- Installed Wazuh Dashboard
+- Verified dashboard accessibility
+
+## Phase 3 — Endpoint Integration
 
 - Installed Wazuh Agent on Windows 11
-- Registered endpoint with Wazuh Manager
-- Verified successful telemetry transmission
+- Registered endpoint with manager
+- Verified secure telemetry flow
 
-### Phase 3 — Vulnerability Detection
+## Phase 4 — Vulnerability Assessment
 
-- Enabled Vulnerability Detector module
-- Synchronized CVE databases
 - Performed baseline vulnerability scans
+- Identified vulnerable software
+- Verified CVE detection capabilities
 
-### Phase 4 — Threat Monitoring
+## Phase 5 — Threat Monitoring
 
 - Simulated brute-force login attempts
 - Monitored alert generation
@@ -89,221 +144,159 @@ The system uses a client-server architecture secured through AWS Security Groups
 
 ---
 
-## Deployment Scripts
+# Deployment Scripts
 
-### Windows Agent Installation (PowerShell)
+## Windows Agent Installation (PowerShell)
 
 ```powershell
 # Deploy Wazuh Agent with Manager IP
-Invoke-WebRequest -Uri https://packages.wazuh.com/4.x/windows/wazuh-agent-4.7.5-1.msi -OutFile ${env.tmp}\wazuh-agent.msi
+
+Invoke-WebRequest -Uri https://packages.wazuh.com/4.x/windows/wazuh-agent-4.7.5-1.msi `
+-OutFile ${env.tmp}\wazuh-agent.msi
 
 msiexec.exe /i ${env.tmp}\wazuh-agent.msi /q `
 WAZUH_MANAGER='YOUR_AWS_IP' `
 WAZUH_REGISTRATION_SERVER='YOUR_AWS_IP'
 
 NET START WazuhSvc
-````
+```
 
-### Linux Filesystem Expansion
+---
+
+## Linux Filesystem Expansion
 
 ```bash
-# Expand filesystem after EBS volume scaling
 sudo growpart /dev/nvme0n1 1
 sudo resize2fs /dev/nvme0n1p1
 ```
 
 ---
 
-## Vulnerability Findings
+# Vulnerability Findings
 
-### Baseline Assessment
+## Baseline Assessment
 
 Initial scans identified multiple security vulnerabilities on the Windows 11 endpoint.
 
 | Severity | Count |
-| -------- | ----- |
-| Critical | 2     |
-| High     | 10    |
-| Medium   | 11    |
-| Low      | 1     |
+|----------|-------|
+| Critical | 2 |
+| High | 10 |
+| Medium | 11 |
+| Low | 1 |
 
 ### Key Findings
 
-* Python 3.10.11 Vulnerabilities
-
-  * CVE-2024-6232
-  * CVE-2022-37454
-
-* MySQL Server 5.0
-
-  * End-of-Life software
-  * Multiple known CVEs
-
-* Configuration weaknesses identified through Security Configuration Assessment (SCA)
+- Python 3.10.11 vulnerable to multiple CVEs
+- MySQL Server 5.0 detected as End-of-Life software
+- Weak security configuration settings identified through SCA scans
 
 ---
 
-## Remediation Results
+# Remediation Actions
 
-The attack surface was reduced by:
+The following remediation steps were performed:
 
-* Updating vulnerable Python packages
-* Removing End-of-Life MySQL Server software
-* Reviewing insecure configurations identified by SCA
-
-This demonstrated the full vulnerability management lifecycle:
-
-* Detection
-* Prioritization
-* Remediation
-* Validation
+- Removed unsupported MySQL Server 5.0
+- Updated vulnerable Python packages
+- Improved system hardening posture
+- Reduced overall attack surface
 
 ---
 
-## Attack Simulation
+# Threat Detection Results
 
-### Brute Force Simulation
+## Brute Force Simulation
 
-A brute-force attack simulation was conducted using repeated failed login attempts against the Windows endpoint.
+A brute-force attack simulation was conducted against the monitored endpoint.
 
-### Detection Results
+### Detection Outcomes
 
-* High-severity alerts successfully triggered
-* Alert Level: 10
-* MITRE ATT&CK Technique:
-
-  * T1110 — Brute Force
-
----
-
-## Security Monitoring Features
-
-* Vulnerability Detection
-* MITRE ATT&CK Mapping
-* File Integrity Monitoring (FIM)
-* Security Configuration Assessment (SCA)
-* Real-time Log Monitoring
-* Threat Alerting
+- Wazuh generated high-severity alerts
+- Events mapped successfully to:
+  - **MITRE ATT&CK T1110 — Brute Force**
+- Alert telemetry visible in real time within the dashboard
 
 ---
 
-## Screenshots
+# Security Challenges & Troubleshooting
 
-### Active Wazuh Agent
+## Storage Constraints
 
-![Agent](screenshots/active-agent.png)
+- Expanded AWS EBS volume from 8GB to 20GB
+- Prevented Wazuh indexing failures
 
-### Vulnerability Dashboard
+## Firewall Hardening
 
-![Vulnerabilities](screenshots/vulnerabilities-dashboard.png)
+- Fixed agent connectivity issues
+- Restored HTTPS dashboard access
+- Validated Security Group rules
 
-### Critical Vulnerabilities
+## Resource Management
 
-![Critical](screenshots/critical-vulnerabilities.png)
-
-### AWS Security Group Rules
-
-![Security Groups](screenshots/security-group-rules.png)
-
-### Security Configuration Assessment
-
-![SCA](screenshots/sca-results.png)
+```bash
+tail -f /var/ossec/logs/ossec.log
+```
 
 ---
 
-## Troubleshooting & Challenges
+# Skills Demonstrated
 
-### Storage Constraints
+## Cloud Security
 
-* Default 8 GiB storage was insufficient for Wazuh indexing and CVE databases
-* Expanded EBS volume to 20 GiB
+- AWS EC2 deployment
+- Security Group hardening
+- EBS storage management
 
-### Agent Connectivity Issues
+## SOC Operations
 
-* Agent initially showed "Offline"
-* Opened ports 1514 and 1515 in AWS Security Groups
+- Real-time monitoring
+- Threat detection
+- Alert analysis
 
-### Dashboard Lockout
+## Vulnerability Management
 
-* HTTPS access was accidentally removed during firewall modification
-* Restored port 443 access
+- CVE detection
+- Remediation lifecycle
+- Risk reduction
 
-### High CPU Usage
+## System Administration
 
-* Vulnerability feed synchronization caused CPU spikes
-* Monitored `ossec.log` during indexing operations
-
-### Service Initialization Delays
-
-* Dashboard displayed "Server is not ready yet"
-* Restarted services and monitored synchronization state
-
----
-
-## Skills Demonstrated
-
-### Cloud Security
-
-* AWS EC2 Management
-* Security Group Hardening
-* EBS Volume Scaling
-
-### SIEM & SOC Operations
-
-* Real-time Threat Monitoring
-* Alert Analysis
-* MITRE ATT&CK Mapping
-
-### Vulnerability Management
-
-* CVE Identification
-* Risk Prioritization
-* Remediation Planning
-
-### System Administration
-
-* Linux Administration
-* PowerShell Automation
-* Service Troubleshooting
+- Ubuntu Linux administration
+- PowerShell automation
+- Windows endpoint management
 
 ---
 
-## Lessons Learned
+# Technologies Used
 
-* Resource planning is critical for SIEM deployments
-* Security Group misconfigurations can interrupt telemetry pipelines
-* CLI-based log analysis is essential during dashboard failures
-* Vulnerability management requires continuous remediation validation
-
----
-
-## Future Improvements
-
-* Integrate Suricata IDS
-* Configure Active Response
-* Add Email Alerting
-* Deploy Multiple Endpoints
-* Implement Sigma Rules
-* Integrate Threat Intelligence Feeds
+- AWS EC2
+- Ubuntu 22.04 LTS
+- Wazuh SIEM
+- Windows 11
+- PowerShell
+- Linux Bash
+- MITRE ATT&CK Framework
 
 ---
 
-## Project Status
+# Future Improvements
 
-✅ Completed Successfully
+- Integrate Suricata IDS
+- Add Sigma detection rules
+- Configure email alerting
+- Implement log forwarding pipelines
+- Add multi-endpoint monitoring
 
 ---
 
-## Author
+# Author
 
-**Ram**
+**DOOLAM DATTATREYA**  
 MCA Cybersecurity & Forensics Student
 
 ---
 
-## Disclaimer
+# License
 
-This project was created in a controlled lab environment for educational and research purposes only.
-
-```
-```
+This project is licensed under the MIT License.
