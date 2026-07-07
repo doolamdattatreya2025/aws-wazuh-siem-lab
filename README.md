@@ -1,11 +1,11 @@
 # Cloud-Native SIEM & Vulnerability Management Lab
 
-A Wazuh SIEM deployment on AWS EC2, monitoring a Windows 11 endpoint —
-built to get hands-on with what a SOC actually looks like day to day:
-endpoint monitoring, vulnerability scanning, MITRE ATT&CK mapping, and
-detecting a simulated brute-force attack.
+A Wazuh SIEM setup on AWS EC2, watching over a Windows 11 computer. I
+built this to learn how a real SOC (Security Operations Center) works —
+watching a computer for problems, finding weak spots, matching attacks to
+MITRE ATT&CK, and catching a fake brute-force attack.
 
-## Architecture
+## How it's set up
 
 ```mermaid
 graph TD
@@ -38,23 +38,24 @@ graph TD
 
 ## Setup
 
-**Manager (cloud side)** — Wazuh Manager, Indexer, and Dashboard, all
-running on a single `t3.medium` EC2 instance on Ubuntu 22.04.
+**Manager (in the cloud)** — Wazuh Manager, Indexer, and Dashboard, all
+running on one `t3.medium` EC2 server using Ubuntu 22.04.
 
-**Endpoint (local side)** — my own Windows 11 laptop, running Wazuh
+**Endpoint (on my laptop)** — my own Windows 11 laptop, running Wazuh
 Agent v4.7.5.
 
-### Security group rules
+### Security group rules (firewall rules)
 
-| Port | Protocol | Purpose | Source |
+| Port | Type | What it's for | Who can access |
 |------|----------|----------|---------|
-| 22 | TCP | SSH management | My IP only |
-| 443 | TCP | Wazuh dashboard | 0.0.0.0/0 |
-| 1514 | TCP | Agent event traffic | 0.0.0.0/0 |
-| 1515 | TCP | Agent registration | 0.0.0.0/0 |
+| 22 | TCP | SSH login | Only my IP |
+| 443 | TCP | Wazuh dashboard | Everyone |
+| 1514 | TCP | Agent sends events | Everyone |
+| 1515 | TCP | Agent sign-up | Everyone |
 
-I'd tighten 443/1514/1515 down from open access in a real deployment —
-left them open here since this is a single-endpoint lab, not production.
+In a real company setup, I would lock down 443/1514/1515 too, not leave
+them open to everyone. I left them open here since this lab only has one
+computer connected.
 
 ## Screenshots
 
@@ -68,25 +69,25 @@ left them open here since this is a single-endpoint lab, not production.
 *Critical findings*
 
 ![Active Agent](screenshots/active-agent.png)
-*Agent connected and reporting*
+*Agent connected and sending data*
 
 ![SCA Results](screenshots/sca-results.png)
-*Security configuration assessment results*
+*Security configuration check results*
 
-## How I built it
+## Steps I followed
 
-1. **Infrastructure** — spun up an EC2 Ubuntu instance, configured the
-   security group, hardened SSH access to my IP only
-2. **Wazuh install** — Manager, Indexer, and Dashboard, then confirmed I
-   could actually reach the dashboard
-3. **Endpoint enrollment** — installed the agent on my Windows 11 machine
-   and registered it with the manager, checked telemetry was flowing
-4. **Vulnerability scanning** — ran baseline scans, checked what came back
-   against known CVEs
-5. **Threat simulation** — ran a brute-force login attempt against the
-   endpoint and watched how Wazuh alerted on it and mapped it to MITRE ATT&CK
+1. **Set up the server** — created an EC2 Ubuntu server, set up the
+   firewall rules, and locked SSH access to only my own IP
+2. **Installed Wazuh** — Manager, Indexer, and Dashboard, then checked I
+   could open the dashboard in a browser
+3. **Connected the endpoint** — installed the agent on my Windows 11
+   laptop, connected it to the manager, checked that data was flowing in
+4. **Ran a vulnerability scan** — scanned the laptop and checked the
+   results against known security bugs (CVEs)
+5. **Tested an attack** — ran a fake brute-force login attempt on the
+   laptop and watched how Wazuh caught it and matched it to MITRE ATT&CK
 
-## Windows agent install (PowerShell)
+## Installing the agent on Windows (PowerShell)
 
 ```powershell
 # Deploy Wazuh Agent with Manager IP
@@ -101,70 +102,71 @@ WAZUH_REGISTRATION_SERVER='YOUR_AWS_IP'
 NET START WazuhSvc
 ```
 
-## Expanding the EBS volume
+## Making the disk bigger
 
-Ran into indexing failures early on from running out of disk — this fixed it:
+The server started having problems saving data because it ran low on
+space. This fixed it:
 
 ```bash
 sudo growpart /dev/nvme0n1 1
 sudo resize2fs /dev/nvme0n1p1
 ```
 
-## What the vulnerability scan found
+## What the scan found
 
-| Severity | Count |
+| Level | How many |
 |----------|-------|
 | Critical | 2 |
 | High | 10 |
 | Medium | 11 |
 | Low | 1 |
 
-The two critical findings were a Python 3.10.11 install with several known
-CVEs, and an old MySQL Server 5.0 instance that's been end-of-life for
-years. SCA scans also flagged a handful of weak configuration settings.
+The two critical problems were: an old Python 3.10.11 install with known
+bugs, and an old MySQL Server 5.0 that Microsoft/Oracle no longer supports
+or fixes. The security check also found a few weak settings.
 
-**What I did about it:**
-- Removed the MySQL 5.0 install entirely
-- Updated the vulnerable Python packages
-- Cleaned up a few of the flagged config settings to reduce the attack surface
+**What I did to fix it:**
+- Removed the old MySQL 5.0 install completely
+- Updated the Python packages that had known bugs
+- Fixed a few weak settings to make the system safer
 
-## Brute-force detection
+## Testing a brute-force attack
 
-Ran a simulated brute-force login attempt against the endpoint to see if
-the setup would actually catch it. Wazuh generated high-severity alerts
-and correctly mapped the activity to **MITRE ATT&CK T1110 (Brute Force)**,
-visible in the dashboard in near real time.
+I ran a fake brute-force login attempt on the laptop to see if the setup
+would catch it. Wazuh sent high-priority alerts and correctly matched the
+attack to **MITRE ATT&CK T1110 (Brute Force)**. I could see the alert on
+the dashboard almost right away.
 
-## Problems along the way
+## Problems I ran into
 
-**Disk space.** The default 8GB EBS volume wasn't enough — Wazuh started
-throwing indexing errors under load. Bumped it to 20GB and that resolved it.
+**Not enough disk space.** The default 8GB storage wasn't enough — Wazuh
+started throwing errors when saving data. I increased it to 20GB and that
+fixed it.
 
-**Agent connectivity.** Had some early issues getting the Windows agent to
-actually reach the manager — turned out to be a security group rule I'd
-misconfigured. Fixed the rule and also had to re-check dashboard HTTPS
-access after that.
+**Agent couldn't connect.** At first the Windows agent couldn't reach the
+manager. It turned out I had set up a firewall rule wrong. After fixing
+the rule, I also had to check that the dashboard still worked over HTTPS.
 
-**Debugging in general.** Kept `/var/ossec/logs/ossec.log` open in a
-separate terminal for most of this — that log is where most of the useful
-error detail actually shows up:
+**Finding the actual error.** I kept this log file open in a separate
+window most of the time — it shows the real error messages when something
+goes wrong:
 
 ```bash
 tail -f /var/ossec/logs/ossec.log
 ```
 
-## Stack
+## Tools used
 
 AWS EC2, Ubuntu 22.04 LTS, Wazuh SIEM, Windows 11, PowerShell, Bash,
 MITRE ATT&CK framework.
 
-## Where I'd take this next
+## What I want to add next
 
-- Add Suricata for network-level IDS alongside Wazuh
-- Try writing some custom Sigma detection rules instead of relying only
-  on Wazuh's built-in ones
-- Set up actual email alerting instead of just watching the dashboard
-- Expand to more than one endpoint — this lab only covers a single machine
+- Add Suricata for extra network-level attack detection
+- Try writing my own detection rules (Sigma rules) instead of only using
+  Wazuh's built-in ones
+- Set up email alerts instead of only checking the dashboard
+- Connect more than one computer — right now this only watches one laptop
 
 ## Author
 
