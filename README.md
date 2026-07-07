@@ -1,21 +1,11 @@
 # Cloud-Native SIEM & Vulnerability Management Lab
 
-## Overview
+A Wazuh SIEM deployment on AWS EC2, monitoring a Windows 11 endpoint —
+built to get hands-on with what a SOC actually looks like day to day:
+endpoint monitoring, vulnerability scanning, MITRE ATT&CK mapping, and
+detecting a simulated brute-force attack.
 
-This project demonstrates the deployment of a cloud-native Security Information and Event Management (SIEM) environment using **Wazuh** hosted on **AWS EC2** to monitor a **Windows 11** endpoint in real time.
-
-The lab simulates enterprise-level Security Operations Center (SOC) workflows including:
-
-- Endpoint monitoring
-- Vulnerability detection
-- Threat analysis
-- MITRE ATT&CK mapping
-- Security configuration assessment
-- Brute-force attack detection
-
----
-
-# Architecture & Data Flow
+## Architecture
 
 ```mermaid
 graph TD
@@ -46,107 +36,57 @@ graph TD
     end
 ```
 
----
+## Setup
 
-# Infrastructure Components
+**Manager (cloud side)** — Wazuh Manager, Indexer, and Dashboard, all
+running on a single `t3.medium` EC2 instance on Ubuntu 22.04.
 
-## Manager (Cloud)
+**Endpoint (local side)** — my own Windows 11 laptop, running Wazuh
+Agent v4.7.5.
 
-- Wazuh Manager
-- Wazuh Indexer
-- Wazuh Dashboard
-- Hosted on Ubuntu 22.04 LTS
-- AWS EC2 Instance Type: `t3.medium`
-
-## Endpoint (Local)
-
-- Windows 11 Laptop
-- Wazuh Agent v4.7.5
-
----
-
-# AWS Security Group Configuration
+### Security group rules
 
 | Port | Protocol | Purpose | Source |
 |------|----------|----------|---------|
-| 22 | TCP | SSH Management | My IP Only |
-| 443 | TCP | Wazuh Dashboard | 0.0.0.0/0 |
-| 1514 | TCP | Agent Event Traffic | 0.0.0.0/0 |
-| 1515 | TCP | Agent Registration | 0.0.0.0/0 |
+| 22 | TCP | SSH management | My IP only |
+| 443 | TCP | Wazuh dashboard | 0.0.0.0/0 |
+| 1514 | TCP | Agent event traffic | 0.0.0.0/0 |
+| 1515 | TCP | Agent registration | 0.0.0.0/0 |
 
----
+I'd tighten 443/1514/1515 down from open access in a real deployment —
+left them open here since this is a single-endpoint lab, not production.
 
-# Project Screenshots
-
-## AWS Security Group Rules
+## Screenshots
 
 ![AWS Security Group](screenshots/security-group-rules.png)
-
----
-
-## Vulnerability Dashboard
+*Security group rules*
 
 ![Vulnerability Dashboard](screenshots/vulnerabilities-dashboard.png)
-
----
-
-## Critical Vulnerability Findings
+*Vulnerability dashboard*
 
 ![Critical Vulnerabilities](screenshots/critical-vulnerabilities.png)
-
----
-
-## Active Wazuh Agent
+*Critical findings*
 
 ![Active Agent](screenshots/active-agent.png)
-
----
-
-## Security Configuration Assessment (SCA)
+*Agent connected and reporting*
 
 ![SCA Results](screenshots/sca-results.png)
+*Security configuration assessment results*
 
----
+## How I built it
 
-# Deployment Phases
+1. **Infrastructure** — spun up an EC2 Ubuntu instance, configured the
+   security group, hardened SSH access to my IP only
+2. **Wazuh install** — Manager, Indexer, and Dashboard, then confirmed I
+   could actually reach the dashboard
+3. **Endpoint enrollment** — installed the agent on my Windows 11 machine
+   and registered it with the manager, checked telemetry was flowing
+4. **Vulnerability scanning** — ran baseline scans, checked what came back
+   against known CVEs
+5. **Threat simulation** — ran a brute-force login attempt against the
+   endpoint and watched how Wazuh alerted on it and mapped it to MITRE ATT&CK
 
-## Phase 1 — Cloud Infrastructure Setup
-
-- Created AWS EC2 Ubuntu instance
-- Configured Security Groups
-- Opened required SIEM ports
-- Hardened SSH access
-
-## Phase 2 — Wazuh Deployment
-
-- Installed Wazuh Manager
-- Installed Wazuh Indexer
-- Installed Wazuh Dashboard
-- Verified dashboard accessibility
-
-## Phase 3 — Endpoint Integration
-
-- Installed Wazuh Agent on Windows 11
-- Registered endpoint with manager
-- Verified secure telemetry flow
-
-## Phase 4 — Vulnerability Assessment
-
-- Performed baseline vulnerability scans
-- Identified vulnerable software
-- Verified CVE detection capabilities
-
-## Phase 5 — Threat Monitoring
-
-- Simulated brute-force login attempts
-- Monitored alert generation
-- Verified MITRE ATT&CK mappings
-
----
-
-# Deployment Scripts
-
-## Windows Agent Installation (PowerShell)
+## Windows agent install (PowerShell)
 
 ```powershell
 # Deploy Wazuh Agent with Manager IP
@@ -161,22 +101,16 @@ WAZUH_REGISTRATION_SERVER='YOUR_AWS_IP'
 NET START WazuhSvc
 ```
 
----
+## Expanding the EBS volume
 
-## Linux Filesystem Expansion
+Ran into indexing failures early on from running out of disk — this fixed it:
 
 ```bash
 sudo growpart /dev/nvme0n1 1
 sudo resize2fs /dev/nvme0n1p1
 ```
 
----
-
-# Vulnerability Findings
-
-## Baseline Assessment
-
-Initial scans identified multiple security vulnerabilities on the Windows 11 endpoint.
+## What the vulnerability scan found
 
 | Severity | Count |
 |----------|-------|
@@ -185,118 +119,57 @@ Initial scans identified multiple security vulnerabilities on the Windows 11 end
 | Medium | 11 |
 | Low | 1 |
 
-### Key Findings
+The two critical findings were a Python 3.10.11 install with several known
+CVEs, and an old MySQL Server 5.0 instance that's been end-of-life for
+years. SCA scans also flagged a handful of weak configuration settings.
 
-- Python 3.10.11 vulnerable to multiple CVEs
-- MySQL Server 5.0 detected as End-of-Life software
-- Weak security configuration settings identified through SCA scans
+**What I did about it:**
+- Removed the MySQL 5.0 install entirely
+- Updated the vulnerable Python packages
+- Cleaned up a few of the flagged config settings to reduce the attack surface
 
----
+## Brute-force detection
 
-# Remediation Actions
+Ran a simulated brute-force login attempt against the endpoint to see if
+the setup would actually catch it. Wazuh generated high-severity alerts
+and correctly mapped the activity to **MITRE ATT&CK T1110 (Brute Force)**,
+visible in the dashboard in near real time.
 
-The following remediation steps were performed:
+## Problems along the way
 
-- Removed unsupported MySQL Server 5.0
-- Updated vulnerable Python packages
-- Improved system hardening posture
-- Reduced overall attack surface
+**Disk space.** The default 8GB EBS volume wasn't enough — Wazuh started
+throwing indexing errors under load. Bumped it to 20GB and that resolved it.
 
----
+**Agent connectivity.** Had some early issues getting the Windows agent to
+actually reach the manager — turned out to be a security group rule I'd
+misconfigured. Fixed the rule and also had to re-check dashboard HTTPS
+access after that.
 
-# Threat Detection Results
-
-## Brute Force Simulation
-
-A brute-force attack simulation was conducted against the monitored endpoint.
-
-### Detection Outcomes
-
-- Wazuh generated high-severity alerts
-- Events mapped successfully to:
-  - **MITRE ATT&CK T1110 — Brute Force**
-- Alert telemetry visible in real time within the dashboard
-
----
-
-# Security Challenges & Troubleshooting
-
-## Storage Constraints
-
-- Expanded AWS EBS volume from 8GB to 20GB
-- Prevented Wazuh indexing failures
-
-## Firewall Hardening
-
-- Fixed agent connectivity issues
-- Restored HTTPS dashboard access
-- Validated Security Group rules
-
-## Resource Management
+**Debugging in general.** Kept `/var/ossec/logs/ossec.log` open in a
+separate terminal for most of this — that log is where most of the useful
+error detail actually shows up:
 
 ```bash
 tail -f /var/ossec/logs/ossec.log
 ```
 
----
+## Stack
 
-# Skills Demonstrated
+AWS EC2, Ubuntu 22.04 LTS, Wazuh SIEM, Windows 11, PowerShell, Bash,
+MITRE ATT&CK framework.
 
-## Cloud Security
+## Where I'd take this next
 
-- AWS EC2 deployment
-- Security Group hardening
-- EBS storage management
+- Add Suricata for network-level IDS alongside Wazuh
+- Try writing some custom Sigma detection rules instead of relying only
+  on Wazuh's built-in ones
+- Set up actual email alerting instead of just watching the dashboard
+- Expand to more than one endpoint — this lab only covers a single machine
 
-## SOC Operations
+## Author
 
-- Real-time monitoring
-- Threat detection
-- Alert analysis
+Built by [Dattatreya](https://github.com/doolamdattatreya2025) — MCA Cybersecurity & Forensics student.
 
-## Vulnerability Management
+## License
 
-- CVE detection
-- Remediation lifecycle
-- Risk reduction
-
-## System Administration
-
-- Ubuntu Linux administration
-- PowerShell automation
-- Windows endpoint management
-
----
-
-# Technologies Used
-
-- AWS EC2
-- Ubuntu 22.04 LTS
-- Wazuh SIEM
-- Windows 11
-- PowerShell
-- Linux Bash
-- MITRE ATT&CK Framework
-
----
-
-# Future Improvements
-
-- Integrate Suricata IDS
-- Add Sigma detection rules
-- Configure email alerting
-- Implement log forwarding pipelines
-- Add multi-endpoint monitoring
-
----
-
-# Author
-
-**DOOLAM DATTATREYA**  
-MCA Cybersecurity & Forensics Student
-
----
-
-# License
-
-This project is licensed under the MIT License.
+MIT
